@@ -1,0 +1,22 @@
+FROM node:alpine as static
+WORKDIR /app
+COPY package*.json .
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM golang:alpine as webserver
+WORKDIR /app
+RUN apk add upx
+COPY golang .
+ENV CGO_ENABLED=0
+RUN go build -a -gcflags=all="-l -B" -ldflags="-w -s" -o webserver && upx --best --ultra-brute webserver
+WORKDIR /app/build
+RUN mv /app/webserver .
+COPY --from=static /app/dist /app/build/production
+
+FROM gcr.io/distroless/static
+WORKDIR /app
+COPY --from=webserver /app/build .
+EXPOSE 80
+ENTRYPOINT ["./webserver"]
